@@ -1130,4 +1130,1140 @@
                 el.classList.remove('active');
             });
             const navItem = document.querySelector(`[data-workspace="${workspaceId}"]`);
-           
+            if (navItem) {
+                navItem.classList.add('active');
+            }
+
+            // Заголовок страницы
+            const titles = {
+                'dashboard': 'Дашборд руководителя',
+                'dispatcher': 'Панель диспетчера',
+                'driver': 'Маршрутный лист',
+                'map': 'GPS Мониторинг автопарка',
+                'editor': 'Редактор системы',
+                'reports': 'Отчеты и аналитика'
+            };
+            document.getElementById('pageTitle').textContent = titles[workspaceId] || 'Панель управления';
+
+            // Рендерим содержимое
+            renderWorkspace(workspaceId);
+        }
+
+        function renderWorkspace(workspaceId) {
+            switch(workspaceId) {
+                case 'dashboard':
+                    renderDirectorDashboard();
+                    break;
+                case 'dispatcher':
+                    renderDispatcherPanel();
+                    break;
+                case 'driver':
+                    renderDriverPanel();
+                    break;
+                case 'map':
+                    initMap();
+                    break;
+                case 'editor':
+                    renderEditor();
+                    break;
+                case 'reports':
+                    renderReports();
+                    break;
+            }
+        }
+
+        // ======================== ДАШБОРД ДИРЕКТОРА ========================
+        function renderDirectorDashboard() {
+            const workspace = document.getElementById('workspace-dashboard');
+            
+            const totalDrivers = Object.values(DB.users).filter(u => u.role === 'driver').length;
+            const activeTasks = DB.tasks.filter(t => t.status === 'active').length;
+            const completedTasks = DB.tasks.filter(t => t.status === 'completed').length;
+            const totalVehicles = DB.vehicles.length;
+
+            workspace.innerHTML = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: rgba(59,130,246,0.2); color: #3b82f6;">
+                            <i class="fas fa-truck"></i>
+                        </div>
+                        <div>
+                            <div class="stat-value">${totalVehicles}</div>
+                            <div class="stat-label">Активных мусоровозов</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: rgba(16,185,129,0.2); color: #10b981;">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div>
+                            <div class="stat-value">${completedTasks}</div>
+                            <div class="stat-label">Выполнено заданий</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: rgba(245,158,11,0.2); color: #f59e0b;">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div>
+                            <div class="stat-value">${activeTasks}</div>
+                            <div class="stat-label">В работе</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: rgba(139,92,246,0.2); color: #8b5cf6;">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div>
+                            <div class="stat-value">${totalDrivers}</div>
+                            <div class="stat-label">Водителей в штате</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="fas fa-table" style="color: var(--accent);"></i>
+                            Сводка по водителям
+                        </h2>
+                        <button class="btn btn-primary btn-sm" onclick="exportReport()">
+                            <i class="fas fa-download"></i> Экспорт
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Водитель</th>
+                                    <th>Транспорт</th>
+                                    <th>Статус</th>
+                                    <th>Заданий</th>
+                                    <th>Выполнено</th>
+                                    <th>Эффективность</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${Object.values(DB.users)
+                                    .filter(u => u.role === 'driver')
+                                    .map(driver => {
+                                        const tasks = DB.tasks.filter(t => t.driverLogin === driver.login);
+                                        const completed = tasks.filter(t => t.status === 'completed').length;
+                                        const efficiency = tasks.length > 0 ? Math.round((completed / tasks.length) * 100) : 0;
+                                        const vehicle = DB.vehicles.find(v => v.driver === driver.login);
+                                        
+                                        return `
+                                            <tr>
+                                                <td><strong>${driver.name}</strong></td>
+                                                <td>${vehicle ? vehicle.name + ' • ' + vehicle.plate : 'Не назначен'}</td>
+                                                <td><span class="badge badge-success">На линии</span></td>
+                                                <td>${tasks.length}</td>
+                                                <td>${completed}</td>
+                                                <td>
+                                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                                        <div style="flex: 1; height: 6px; background: #1e293b; border-radius: 3px;">
+                                                            <div style="width: ${efficiency}%; height: 100%; background: var(--accent-green); border-radius: 3px;"></div>
+                                                        </div>
+                                                        <span>${efficiency}%</span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-primary" onclick="showWorkspace('map'); focusOnVehicle('${driver.login}')">
+                                                        <i class="fas fa-map-marker-alt"></i> GPS
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ======================== ПАНЕЛЬ ДИСПЕТЧЕРА ========================
+        function renderDispatcherPanel() {
+            const workspace = document.getElementById('workspace-dispatcher');
+            
+            workspace.innerHTML = `
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">
+                                <i class="fas fa-plus-circle" style="color: var(--accent-green);"></i>
+                                Создать наряд
+                            </h2>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Водитель</label>
+                            <select class="form-control" id="taskDriver">
+                                <option value="">Выберите водителя</option>
+                                ${Object.values(DB.users)
+                                    .filter(u => u.role === 'driver')
+                                    .map(d => `<option value="${d.login}">${d.name} - ${DB.vehicles.find(v => v.driver === d.login)?.name || 'Без ТС'}</option>`)
+                                    .join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Адрес сбора отходов</label>
+                            <input type="text" class="form-control" id="taskAddress" placeholder="ул. Примерная, д. 10">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Тип отходов</label>
+                            <select class="form-control" id="taskWasteType">
+                                <option value="ТБО стандартный">ТБО стандартный</option>
+                                <option value="Крупногабаритный">Крупногабаритный мусор</option>
+                                <option value="Строительный">Строительный мусор</option>
+                                <option value="Пищевые отходы">Пищевые отходы</option>
+                                <option value="Опасные отходы">Опасные отходы</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Приоритет</label>
+                            <select class="form-control" id="taskPriority">
+                                <option value="normal">Обычный</option>
+                                <option value="high">Высокий</option>
+                                <option value="critical">Критический</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="createTask()" style="width: 100%; justify-content: center;">
+                            <i class="fas fa-paper-plane"></i> Отправить наряд
+                        </button>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">
+                                <i class="fas fa-truck-loading" style="color: var(--accent);"></i>
+                                Статус техники
+                            </h2>
+                        </div>
+                        ${DB.vehicles.map(v => {
+                            const driver = DB.users[v.driver];
+                            return `
+                                <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid var(--border);">
+                                    <div class="flex-between mb-20">
+                                        <strong>${v.name} • ${v.plate}</strong>
+                                        <span class="badge badge-success">На линии</span>
+                                    </div>
+                                    <div style="font-size: 13px; color: var(--text-muted);">
+                                        <div>👤 Водитель: ${driver?.name || 'Не назначен'}</div>
+                                        <div>📍 Локация: ${v.location}</div>
+                                        <div>⛽ Топливо: ${v.fuel}%</div>
+                                        <div>🚛 Скорость: ${v.speed} км/ч</div>
+                                    </div>
+                                    <button class="btn btn-sm btn-primary mt-20" onclick="showWorkspace('map'); focusOnVehicle('${v.driver}')">
+                                        <i class="fas fa-map-marker-alt"></i> На карте
+                                    </button>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="fas fa-list" style="color: var(--accent);"></i>
+                            Журнал нарядов
+                        </h2>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Водитель</th>
+                                    <th>Адрес</th>
+                                    <th>Тип отходов</th>
+                                    <th>Приоритет</th>
+                                    <th>Статус</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${DB.tasks.map(task => {
+                                    const driver = DB.users[task.driverLogin];
+                                    const statusBadge = {
+                                        'active': 'badge-info',
+                                        'pending': 'badge-warning',
+                                        'completed': 'badge-success',
+                                        'cancelled': 'badge-danger'
+                                    }[task.status] || 'badge-warning';
+                                    
+                                    const statusText = {
+                                        'active': 'В работе',
+                                        'pending': 'Ожидает',
+                                        'completed': 'Выполнен',
+                                        'cancelled': 'Отменён'
+                                    }[task.status] || task.status;
+
+                                    return `
+                                        <tr>
+                                            <td>#${task.id}</td>
+                                            <td>${driver?.name || 'Неизвестно'}</td>
+                                            <td>${task.address}</td>
+                                            <td>${task.wasteType}</td>
+                                            <td>${task.priority === 'high' ? '⚠️ Высокий' : 'Обычный'}</td>
+                                            <td><span class="badge ${statusBadge}">${statusText}</span></td>
+                                            <td>
+                                                ${task.status === 'active' ? `
+                                                    <button class="btn btn-sm btn-success" onclick="completeTask(${task.id})">
+                                                        <i class="fas fa-check"></i>
+                                                    </button>
+                                                ` : ''}
+                                                <button class="btn btn-sm btn-danger" onclick="deleteTask(${task.id})">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ======================== ПАНЕЛЬ ВОДИТЕЛЯ ========================
+        function renderDriverPanel() {
+            const workspace = document.getElementById('workspace-driver');
+            const myTasks = DB.tasks.filter(t => t.driverLogin === currentUser.login);
+            const activeTask = myTasks.find(t => t.status === 'active');
+            const vehicle = DB.vehicles.find(v => v.driver === currentUser.login);
+
+            workspace.innerHTML = `
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">
+                                <i class="fas fa-clipboard-list" style="color: var(--accent);"></i>
+                                Мои задания (${myTasks.length})
+                            </h2>
+                        </div>
+                        ${myTasks.map(task => {
+                            const statusBadge = {
+                                'active': 'badge-info',
+                                'pending': 'badge-warning',
+                                'completed': 'badge-success'
+                            }[task.status];
+
+                            return `
+                                <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid var(--border);">
+                                    <div class="flex-between mb-20">
+                                        <strong>#${task.id} - ${task.address}</strong>
+                                        <span class="badge ${statusBadge}">${task.status}</span>
+                                    </div>
+                                    <div style="font-size: 13px; color: var(--text-muted);">
+                                        🗑️ ${task.wasteType}
+                                        ${task.photo ? '<br>📸 Фото прикреплено' : ''}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('') || '<p style="color: var(--text-muted);">Нет активных заданий</p>'}
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">
+                                <i class="fas fa-play-circle" style="color: var(--accent-green);"></i>
+                                Текущее задание
+                            </h2>
+                        </div>
+                        ${activeTask ? `
+                            <div style="background: rgba(59,130,246,0.1); padding: 20px; border-radius: 10px; border: 1px solid var(--accent);">
+                                <h3 style="margin-bottom: 15px;">📍 ${activeTask.address}</h3>
+                                <div style="font-size: 14px; color: var(--text-muted); margin-bottom: 15px;">
+                                    <div>🗑️ Тип: ${activeTask.wasteType}</div>
+                                    <div>⏰ Создан: ${activeTask.created}</div>
+                                </div>
+                                <div class="flex-between gap-10">
+                                    <button class="btn btn-success" onclick="openCamera(${activeTask.id})" style="flex: 1;">
+                                        <i class="fas fa-camera"></i> Фотофиксация
+                                    </button>
+                                    <button class="btn btn-primary" onclick="completeTask(${activeTask.id})" style="flex: 1;">
+                                        <i class="fas fa-check"></i> Завершить
+                                    </button>
+                                </div>
+                            </div>
+                        ` : `
+                            <p style="color: var(--text-muted); text-align: center; padding: 40px 0;">
+                                <i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 15px;"></i><br>
+                                Нет активного задания
+                            </p>
+                        `}
+                    </div>
+                </div>
+
+                ${vehicle ? `
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">
+                                <i class="fas fa-truck" style="color: var(--accent);"></i>
+                                Мой транспорт: ${vehicle.name} • ${vehicle.plate}
+                            </h2>
+                        </div>
+                        <div class="grid-3">
+                            <div style="text-align: center; padding: 20px;">
+                                <div style="font-size: 32px; font-weight: 700; color: var(--accent-green);">${vehicle.fuel}%</div>
+                                <div style="color: var(--text-muted); margin-top: 5px;">Топливо</div>
+                            </div>
+                            <div style="text-align: center; padding: 20px;">
+                                <div style="font-size: 32px; font-weight: 700; color: var(--accent);">${vehicle.speed}</div>
+                                <div style="color: var(--text-muted); margin-top: 5px;">км/ч</div>
+                            </div>
+                            <div style="text-align: center; padding: 20px;">
+                                <div style="font-size: 32px; font-weight: 700; color: var(--accent-purple);">${vehicle.capacity}</div>
+                                <div style="color: var(--text-muted); margin-top: 5px;">Объём</div>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
+            `;
+        }
+
+        // ======================== КАРТА ========================
+        function initMap() {
+            setTimeout(() => {
+                if (!mapInstance) {
+                    mapInstance = L.map('map').setView([52.9630, 63.1180], 14);
+                    
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors'
+                    }).addTo(mapInstance);
+                }
+
+                // Очищаем старые маркеры
+                Object.values(vehicleMarkers).forEach(marker => mapInstance.removeLayer(marker));
+                vehicleMarkers = {};
+
+                // Добавляем маркеры техники
+                DB.vehicles.forEach(vehicle => {
+                    const driver = DB.users[vehicle.driver];
+                    const icon = L.divIcon({
+                        className: 'vehicle-marker',
+                        html: `<div style="
+                            background: ${vehicle.speed > 0 ? '#10b981' : '#f59e0b'};
+                            width: 40px;
+                            height: 40px;
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            border: 3px solid white;
+                            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+                            font-size: 18px;
+                            color: white;
+                        ">
+                            <i class="fas fa-truck"></i>
+                        </div>`,
+                        iconSize: [40, 40],
+                        iconAnchor: [20, 20]
+                    });
+
+                    const marker = L.marker([vehicle.gps.lat, vehicle.gps.lng], { icon })
+                        .addTo(mapInstance)
+                        .bindPopup(`
+                            <strong>${vehicle.name} • ${vehicle.plate}</strong><br>
+                            Водитель: ${driver?.name || 'Не назначен'}<br>
+                            Скорость: ${vehicle.speed} км/ч<br>
+                            Локация: ${vehicle.location}
+                        `);
+
+                    marker.on('click', () => {
+                        updateMapInfo(vehicle);
+                    });
+
+                    vehicleMarkers[vehicle.driver] = marker;
+                });
+
+                // Добавляем точки заданий
+                DB.tasks.filter(t => t.status === 'active').forEach(task => {
+                    const vehicle = DB.vehicles.find(v => v.driver === task.driverLogin);
+                    if (vehicle) {
+                        // Смещаем координаты для визуализации
+                        const taskIcon = L.divIcon({
+                            className: 'vehicle-marker',
+                            html: `<div style="
+                                background: #ef4444;
+                                width: 30px;
+                                height: 30px;
+                                border-radius: 50%;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                border: 2px solid white;
+                                box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+                                font-size: 14px;
+                                color: white;
+                            ">
+                                <i class="fas fa-trash"></i>
+                            </div>`,
+                            iconSize: [30, 30],
+                            iconAnchor: [15, 15]
+                        });
+
+                        L.marker([
+                            vehicle.gps.lat + (Math.random() - 0.5) * 0.005,
+                            vehicle.gps.lng + (Math.random() - 0.5) * 0.005
+                        ], { icon: taskIcon })
+                        .addTo(mapInstance)
+                        .bindPopup(`📍 ${task.address}<br>🗑️ ${task.wasteType}`);
+                    }
+                });
+            }, 300);
+        }
+
+        function focusOnVehicle(driverLogin) {
+            showWorkspace('map');
+            setTimeout(() => {
+                if (mapInstance && vehicleMarkers[driverLogin]) {
+                    const vehicle = DB.vehicles.find(v => v.driver === driverLogin);
+                    mapInstance.setView([vehicle.gps.lat, vehicle.gps.lng], 16);
+                    vehicleMarkers[driverLogin].openPopup();
+                    updateMapInfo(vehicle);
+                }
+            }, 500);
+        }
+
+        function updateMapInfo(vehicle) {
+            const driver = DB.users[vehicle.driver];
+            const info = document.getElementById('vehicleInfo');
+            info.innerHTML = `
+                <div style="margin-bottom: 20px;">
+                    <h3>🚛 ${vehicle.name} • ${vehicle.plate}</h3>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <strong>Водитель:</strong> ${driver?.name || 'Не назначен'}
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <strong>Скорость:</strong> ${vehicle.speed} км/ч
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <strong>Топливо:</strong> ${vehicle.fuel}%
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <strong>Локация:</strong> ${vehicle.location}
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <strong>Координаты:</strong><br>
+                    ${vehicle.gps.lat.toFixed(4)}, ${vehicle.gps.lng.toFixed(4)}
+                </div>
+            `;
+            document.getElementById('mapInfo').querySelector('h3').style.display = 'none';
+        }
+
+        // ======================== КАМЕРА ========================
+        function openCamera(taskId) {
+            const modal = document.getElementById('cameraModal');
+            modal.classList.add('active');
+            capturedPhotoData = null;
+            
+            // Пытаемся открыть камеру
+            const video = document.getElementById('cameraVideo');
+            const canvas = document.getElementById('photoCanvas');
+            const placeholder = document.getElementById('photoPlaceholder');
+            
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(stream => {
+                        video.srcObject = stream;
+                        video.style.display = 'block';
+                        placeholder.style.display = 'none';
+                    })
+                    .catch(err => {
+                        console.log('Камера недоступна:', err);
+                        video.style.display = 'none';
+                        placeholder.style.display = 'block';
+                        placeholder.innerHTML = `
+                            <i class="fas fa-camera" style="font-size: 48px; margin-bottom: 15px;"></i>
+                            <p>Камера недоступна</p>
+                            <p style="font-size: 12px;">Будет создан тестовый снимок</p>
+                        `;
+                    });
+            }
+        }
+
+        function closeCamera() {
+            const modal = document.getElementById('cameraModal');
+            modal.classList.remove('active');
+            
+            // Останавливаем видео
+            const video = document.getElementById('cameraVideo');
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+            }
+        }
+
+        function capturePhoto() {
+            const video = document.getElementById('cameraVideo');
+            const canvas = document.getElementById('photoCanvas');
+            const placeholder = document.getElementById('photoPlaceholder');
+            
+            if (video.srcObject) {
+                // Реальная камера
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0);
+                capturedPhotoData = canvas.toDataURL('image/jpeg');
+                
+                video.style.display = 'none';
+                canvas.style.display = 'block';
+                placeholder.style.display = 'none';
+                
+                showToast('Снимок сделан!');
+            } else {
+                // Тестовый снимок
+                canvas.width = 640;
+                canvas.height = 480;
+                const ctx = canvas.getContext('2d');
+                
+                // Создаем тестовое изображение
+                ctx.fillStyle = '#1a1f2e';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Добавляем текст
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '24px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('🚛 Фотофиксация ТБО', canvas.width/2, canvas.height/2 - 30);
+                ctx.fillText(`Дата: ${new Date().toLocaleString('ru')}`, canvas.width/2, canvas.height/2 + 10);
+                ctx.fillText(`Водитель: ${currentUser.name}`, canvas.width/2, canvas.height/2 + 50);
+                
+                // Добавляем рамку
+                ctx.strokeStyle = '#3b82f6';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+                
+                capturedPhotoData = canvas.toDataURL('image/jpeg');
+                canvas.style.display = 'block';
+                placeholder.style.display = 'none';
+                
+                showToast('Тестовый снимок создан');
+            }
+        }
+
+        function savePhoto() {
+            if (!capturedPhotoData) {
+                showToast('Сначала сделайте снимок!', 'error');
+                return;
+            }
+
+            // В реальном приложении здесь был бы запрос к GitHub API
+            // для сохранения в папку /tbo/photos/
+            
+            // Имитация сохранения
+            const activeTask = DB.tasks.find(t => 
+                t.driverLogin === currentUser.login && 
+                t.status === 'active'
+            );
+            
+            if (activeTask) {
+                activeTask.photo = capturedPhotoData;
+                showToast('Фото сохранено в /tbo/photos/');
+            }
+            
+            closeCamera();
+            renderDriverPanel();
+        }
+
+        // ======================== РЕДАКТОР ========================
+        function renderEditor() {
+            const workspace = document.getElementById('workspace-editor');
+            
+            workspace.innerHTML = `
+                <div class="editor-grid">
+                    <div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h2 class="card-title">
+                                    <i class="fas fa-users" style="color: var(--accent);"></i>
+                                    Сотрудники
+                                </h2>
+                                <button class="btn btn-primary btn-sm" onclick="addNewUser()">
+                                    <i class="fas fa-plus"></i> Добавить
+                                </button>
+                            </div>
+                            <div class="editor-list" id="usersList">
+                                ${Object.values(DB.users).map(user => `
+                                    <div class="editor-item" onclick="editUser('${user.login}')">
+                                        <div class="flex-between">
+                                            <div>
+                                                <strong>${user.name}</strong>
+                                                <div style="font-size: 12px; color: var(--text-muted);">
+                                                    ${getRoleName(user.role)} • ${user.login}
+                                                </div>
+                                            </div>
+                                            <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); deleteUser('${user.login}')">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h2 class="card-title">
+                                    <i class="fas fa-truck" style="color: var(--accent-green);"></i>
+                                    Техника
+                                </h2>
+                                <button class="btn btn-primary btn-sm" onclick="addNewVehicle()">
+                                    <i class="fas fa-plus"></i> Добавить
+                                </button>
+                            </div>
+                            <div class="editor-list" id="vehiclesList">
+                                ${DB.vehicles.map(vehicle => `
+                                    <div class="editor-item">
+                                        <strong>${vehicle.name} • ${vehicle.plate}</strong>
+                                        <div style="font-size: 12px; color: var(--text-muted);">
+                                            Водитель: ${DB.users[vehicle.driver]?.name || 'Не назначен'}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="card" id="editorForm">
+                            <div class="card-header">
+                                <h2 class="card-title">
+                                    <i class="fas fa-edit" style="color: var(--accent);"></i>
+                                    Редактирование
+                                </h2>
+                            </div>
+                            <div id="editorFormContent">
+                                <p style="color: var(--text-muted); text-align: center; padding: 40px;">
+                                    Выберите элемент для редактирования
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function editUser(login) {
+            const user = DB.users[login];
+            if (!user) return;
+            
+            const formContent = document.getElementById('editorFormContent');
+            formContent.innerHTML = `
+                <h3 style="margin-bottom: 20px;">Редактирование: ${user.name}</h3>
+                
+                <div class="form-group">
+                    <label class="form-label">ФИО</label>
+                    <input type="text" class="form-control" id="editUserName" value="${user.name}">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Логин</label>
+                    <input type="text" class="form-control" id="editUserLogin" value="${user.login}">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Пароль</label>
+                    <input type="text" class="form-control" id="editUserPassword" value="${user.password}">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Роль</label>
+                    <select class="form-control" id="editUserRole">
+                        <option value="driver" ${user.role === 'driver' ? 'selected' : ''}>Водитель</option>
+                        <option value="dispatcher" ${user.role === 'dispatcher' ? 'selected' : ''}>Диспетчер</option>
+                        <option value="director" ${user.role === 'director' ? 'selected' : ''}>Директор</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Телефон</label>
+                    <input type="text" class="form-control" id="editUserPhone" value="${user.phone || ''}">
+                </div>
+                
+                <div class="flex-between gap-10 mt-20">
+                    <button class="btn btn-primary" onclick="saveUser('${login}')">
+                        <i class="fas fa-save"></i> Сохранить
+                    </button>
+                    <button class="btn btn-danger" onclick="deleteUser('${login}')">
+                        <i class="fas fa-trash"></i> Удалить
+                    </button>
+                </div>
+            `;
+        }
+
+        function saveUser(originalLogin) {
+            const name = document.getElementById('editUserName').value;
+            const login = document.getElementById('editUserLogin').value;
+            const password = document.getElementById('editUserPassword').value;
+            const role = document.getElementById('editUserRole').value;
+            const phone = document.getElementById('editUserPhone').value;
+            
+            if (!name || !login || !password) {
+                showToast('Заполните все поля!', 'error');
+                return;
+            }
+            
+            // Обновляем или создаем пользователя
+            if (originalLogin !== login) {
+                delete DB.users[originalLogin];
+            }
+            
+            DB.users[login] = {
+                ...DB.users[originalLogin] || {},
+                name,
+                login,
+                password,
+                role,
+                phone,
+                avatar: name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+            };
+            
+            showToast('Данные сохранены!');
+            renderEditor();
+        }
+
+        function addNewUser() {
+            const formContent = document.getElementById('editorFormContent');
+            formContent.innerHTML = `
+                <h3 style="margin-bottom: 20px;">Новый сотрудник</h3>
+                
+                <div class="form-group">
+                    <label class="form-label">ФИО</label>
+                    <input type="text" class="form-control" id="editUserName" placeholder="Иванов Иван Иванович">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Логин</label>
+                    <input type="text" class="form-control" id="editUserLogin" placeholder="ivanov">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Пароль</label>
+                    <input type="text" class="form-control" id="editUserPassword" placeholder="12345">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Роль</label>
+                    <select class="form-control" id="editUserRole">
+                        <option value="driver">Водитель</option>
+                        <option value="dispatcher">Диспетчер</option>
+                        <option value="director">Директор</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Телефон</label>
+                    <input type="text" class="form-control" id="editUserPhone" placeholder="+7 (777) 123-45-67">
+                </div>
+                
+                <button class="btn btn-primary mt-20" onclick="saveNewUser()" style="width: 100%; justify-content: center;">
+                    <i class="fas fa-plus"></i> Создать
+                </button>
+            `;
+        }
+
+        function saveNewUser() {
+            const name = document.getElementById('editUserName').value;
+            const login = document.getElementById('editUserLogin').value;
+            const password = document.getElementById('editUserPassword').value;
+            const role = document.getElementById('editUserRole').value;
+            const phone = document.getElementById('editUserPhone').value;
+            
+            if (!name || !login || !password) {
+                showToast('Заполните все поля!', 'error');
+                return;
+            }
+            
+            if (DB.users[login]) {
+                showToast('Пользователь с таким логином уже существует!', 'error');
+                return;
+            }
+            
+            DB.users[login] = {
+                id: Object.keys(DB.users).length + 1,
+                login,
+                password,
+                name,
+                role,
+                phone,
+                avatar: name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
+                status: 'offline'
+            };
+            
+            showToast('Сотрудник добавлен!');
+            renderEditor();
+        }
+
+        function deleteUser(login) {
+            if (confirm(`Удалить пользователя ${DB.users[login]?.name}?`)) {
+                delete DB.users[login];
+                showToast('Пользователь удален');
+                renderEditor();
+            }
+        }
+
+        function addNewVehicle() {
+            const name = prompt('Название техники:');
+            const plate = prompt('Госномер:');
+            const driver = prompt('Логин водителя:');
+            
+            if (name && plate) {
+                DB.vehicles.push({
+                    id: DB.vehicles.length + 1,
+                    name,
+                    plate,
+                    driver: driver || '',
+                    status: 'active',
+                    fuel: 100,
+                    capacity: '12 м³',
+                    gps: { lat: 52.9630, lng: 63.1180 },
+                    speed: 0,
+                    location: 'Гараж'
+                });
+                showToast('Техника добавлена!');
+                renderEditor();
+            }
+        }
+
+        // ======================== ОТЧЕТЫ ========================
+        function renderReports() {
+            const workspace = document.getElementById('workspace-reports');
+            
+            workspace.innerHTML = `
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="fas fa-chart-bar" style="color: var(--accent);"></i>
+                            Отчеты по вывозу ТБО
+                        </h2>
+                        <button class="btn btn-primary btn-sm" onclick="exportReport()">
+                            <i class="fas fa-download"></i> Скачать отчет
+                        </button>
+                    </div>
+                    
+                    <div class="grid-2 mb-20">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: rgba(16,185,129,0.2); color: #10b981;">
+                                <i class="fas fa-recycle"></i>
+                            </div>
+                            <div>
+                                <div class="stat-value">${DB.tasks.filter(t => t.status === 'completed').length * 4} м³</div>
+                                <div class="stat-label">Всего вывезено отходов</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: rgba(59,130,246,0.2); color: #3b82f6;">
+                                <i class="fas fa-route"></i>
+                            </div>
+                            <div>
+                                <div class="stat-value">${DB.reports.reduce((sum, r) => sum + r.trips, 0)}</div>
+                                <div class="stat-label">Всего рейсов на полигон</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Дата</th>
+                                    <th>Водитель</th>
+                                    <th>Выполнено заданий</th>
+                                    <th>Пропущено</th>
+                                    <th>Вывезено отходов</th>
+                                    <th>Рейсов</th>
+                                    <th>Эффективность</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${DB.reports.map(report => {
+                                    const driver = DB.users[report.driver];
+                                    return `
+                                        <tr>
+                                            <td>${report.date}</td>
+                                            <td>${driver?.name || 'Неизвестно'}</td>
+                                            <td>${report.tasksCompleted}</td>
+                                            <td>${report.tasksSkipped}</td>
+                                            <td>${report.totalWaste}</td>
+                                            <td>${report.trips}</td>
+                                            <td>
+                                                <span class="badge ${parseInt(report.efficiency) > 80 ? 'badge-success' : 'badge-warning'}">
+                                                    ${report.efficiency}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="fas fa-camera" style="color: var(--accent);"></i>
+                            Фотоотчеты (папка /tbo/photos/)
+                        </h2>
+                    </div>
+                    <div class="grid-3">
+                        ${DB.tasks.filter(t => t.photo).map(task => `
+                            <div style="text-align: center;">
+                                <img src="${task.photo}" style="width: 100%; height: 200px; object-fit: cover; border-radius: 10px; margin-bottom: 10px;">
+                                <div style="font-size: 13px;">${task.address}</div>
+                                <div style="font-size: 12px; color: var(--text-muted);">#${task.id} • ${task.wasteType}</div>
+                            </div>
+                        `).join('') || '<p style="color: var(--text-muted);">Нет сохраненных фото</p>'}
+                    </div>
+                </div>
+            `;
+        }
+
+        function exportReport() {
+            const reportData = {
+                date: new Date().toISOString(),
+                totalTasks: DB.tasks.length,
+                completedTasks: DB.tasks.filter(t => t.status === 'completed').length,
+                activeTasks: DB.tasks.filter(t => t.status === 'active').length,
+                drivers: Object.values(DB.users).filter(u => u.role === 'driver').length,
+                vehicles: DB.vehicles.length,
+                reports: DB.reports
+            };
+            
+            // Создаем JSON файл для скачивания
+            const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `tbo-report-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            
+            showToast('Отчет экспортирован в /tbo/reports/');
+        }
+
+        // ======================== ФУНКЦИИ ДЛЯ ЗАДАНИЙ ========================
+        function createTask() {
+            const driverLogin = document.getElementById('taskDriver').value;
+            const address = document.getElementById('taskAddress').value;
+            const wasteType = document.getElementById('taskWasteType').value;
+            const priority = document.getElementById('taskPriority').value;
+            
+            if (!driverLogin || !address) {
+                showToast('Выберите водителя и укажите адрес!', 'error');
+                return;
+            }
+            
+            const newTask = {
+                id: Math.max(...DB.tasks.map(t => t.id), 1000) + 1,
+                driverLogin,
+                address,
+                wasteType,
+                priority,
+                status: 'pending',
+                created: new Date().toLocaleString('ru'),
+                completed: null,
+                photo: null
+            };
+            
+            DB.tasks.push(newTask);
+            showToast(`Наряд #${newTask.id} создан!`);
+            renderDispatcherPanel();
+        }
+
+        function completeTask(taskId) {
+            const task = DB.tasks.find(t => t.id === taskId);
+            if (task) {
+                task.status = 'completed';
+                task.completed = new Date().toLocaleString('ru');
+                showToast(`Задание #${taskId} выполнено!`);
+                
+                // Обновляем отчеты
+                const driver = DB.users[task.driverLogin];
+                if (driver) {
+                    let report = DB.reports.find(r => r.date === new Date().toISOString().split('T')[0] && r.driver === task.driverLogin);
+                    if (!report) {
+                        report = {
+                            id: DB.reports.length + 1,
+                            date: new Date().toISOString().split('T')[0],
+                            driver: task.driverLogin,
+                            tasksCompleted: 0,
+                            tasksSkipped: 0,
+                            totalWaste: '0 м³',
+                            trips: 0,
+                            efficiency: '0%'
+                        };
+                        DB.reports.push(report);
+                    }
+                    report.tasksCompleted++;
+                    report.totalWaste = `${report.tasksCompleted * 4} м³`;
+                    report.trips = Math.ceil(report.tasksCompleted / 3);
+                    report.efficiency = `${Math.round((report.tasksCompleted / (report.tasksCompleted + report.tasksSkipped)) * 100) || 100}%`;
+                }
+                
+                renderDriverPanel();
+                renderDispatcherPanel();
+            }
+        }
+
+        function deleteTask(taskId) {
+            if (confirm('Удалить задание #' + taskId + '?')) {
+                DB.tasks = DB.tasks.filter(t => t.id !== taskId);
+                showToast('Задание удалено');
+                renderDispatcherPanel();
+            }
+        }
+
+        // ======================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ========================
+        function updateClock() {
+            const now = new Date();
+            const timeString = now.toLocaleString('ru', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            const clockEl = document.getElementById('currentTime');
+            if (clockEl) {
+                clockEl.textContent = timeString;
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.style.background = type === 'error' ? 'var(--accent-red)' : 'var(--accent-green)';
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // ======================== ИНИЦИАЛИЗАЦИЯ ========================
+        // Обработка Enter на странице логина
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && document.getElementById('loginScreen').style.display !== 'none') {
+                login();
+            }
+        });
+
+        // Автофокус на поле логина
+        document.getElementById('loginInput').focus();
+
+        console.log('🚛 FleetTrack TBO System v2.0');
+        console.log('📁 GitHub структура: /tbo/photos/ и /tbo/reports/');
+        console.log('👥 Роли: Директор, Диспетчер, Водитель');
+        console.log('📸 Камера: работает с реальной камерой или создает тестовые снимки');
+        console.log('🗺️ GPS: интерактивная карта с маркерами техники');
+        console.log('✏️ Редактор: полное управление пользователями и техникой');
+    </script>
+</body>
+</html>
