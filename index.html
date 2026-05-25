@@ -6,6 +6,7 @@
     <title>FleetTrack Enterprise Platform</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Urbanist:wght@700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <style>
         :root {
             --bg-main: #0f172a;
@@ -19,7 +20,7 @@
             --text-main: #ffffff;
             --text-muted: #94a3b8;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Inter', sans-serif; background-color: #1e293b; color: var(--text-main); display: flex; justify-content: center; align-items: center; min-height: 100vh; }
         .app-container { width: 100%; max-width: 410px; height: 840px; background-color: var(--bg-main); border-radius: 36px; overflow: hidden; border: 8px solid #334155; display: flex; flex-direction: column; position: relative; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); }
         .auth-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%); z-index: 100; display: flex; flex-direction: column; justify-content: center; padding: 40px; }
@@ -44,15 +45,15 @@
         .role-badge.ceo { background: rgba(168, 85, 247, 0.15); color: var(--accent-purple); }
         .role-badge.disp { background: rgba(236, 72, 153, 0.15); color: var(--accent-pink); }
         .screen-content { flex: 1; overflow-y: auto; display: none; padding: 20px; }
-        .screen-content.active-screen { display: block; }
+        .screen-content.active-screen { display: flex; flex-direction: column; }
         .section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 12px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
-        .chat-container { display: flex; flex-direction: column; height: 100%; justify-content: space-between; }
-        .chat-messages-box { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-bottom: 15px; max-height: 480px; }
+        .chat-container { display: flex; flex-direction: column; height: 100%; justify-content: space-between; flex: 1; }
+        .chat-messages-box { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-bottom: 15px; max-height: 440px; }
         .msg-bubble { background: var(--bg-card); padding: 12px; border-radius: 14px 14px 14px 4px; max-width: 85%; align-self: flex-start; border: 1px solid rgba(255,255,255,0.02); }
         .msg-bubble.my-msg { background: #1e3a8a; border-radius: 14px 14px 4px 14px; align-self: flex-end; }
         .msg-sender { font-size: 11px; font-weight: 700; margin-bottom: 3px; color: var(--accent-blue); }
         .msg-bubble.my-msg .msg-sender { color: #93c5fd; }
-        .msg-text { font-size: 13px; color: #fff; line-height: 1.4; user-select: text; }
+        .msg-text { font-size: 13px; color: #fff; line-height: 1.4; }
         .msg-time { font-size: 10px; color: var(--text-muted); text-align: right; margin-top: 4px; }
         .chat-input-row { display: flex; gap: 8px; background: var(--bg-card); padding: 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); }
         .chat-text-input { flex: 1; background: none; border: none; outline: none; color: #fff; font-size: 14px; padding: 4px; }
@@ -66,9 +67,8 @@
         .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent-blue), #60a5fa); border-radius: 4px; transition: width 0.4s ease; }
         .gps-btn { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: #60a5fa; padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: 0.2s; }
         .gps-btn:hover { background: var(--accent-blue); color: white; }
-        .map-wrapper { background: #0f172a; border-radius: 20px; border: 1px solid rgba(255,255,255,0.05); overflow: hidden; position: relative; margin-bottom: 15px; }
-        .map-city-label { position: absolute; top: 12px; left: 12px; background: rgba(15, 23, 42, 0.85); padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; color: #60a5fa; border: 1px solid rgba(255,255,255,0.05); z-index: 5; }
-        #rudnyCanvas { display: block; background-color: #111c2e; width: 100%; height: 260px; }
+        .map-wrapper { background: #0f172a; border-radius: 20px; border: 1px solid rgba(255,255,255,0.05); overflow: hidden; position: relative; margin-bottom: 15px; height: 260px; width: 100%; }
+        #realLeafletMap { width: 100%; height: 100%; }
         .gps-data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .gps-telemetry-box { background: var(--bg-card); padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.03); }
         .gps-telemetry-box span { font-size: 11px; color: var(--text-muted); display: block; text-transform: uppercase; }
@@ -101,7 +101,14 @@
         .btn { padding: 16px; border-radius: 12px; border: none; font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
         .btn-secondary { background-color: #334155; color: var(--text-main); }
         .btn-primary { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: var(--text-main); }
-        .camera-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 10; display: none; flex-direction: column; justify-content: space-between; padding: 40px 20px; }
+        
+        /* Блок Отчетности */
+        .report-card { background: var(--bg-card); border-radius: 16px; padding: 15px; margin-top: 15px; border: 1px solid rgba(255,255,255,0.05); }
+        .report-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+        .report-table th, .report-table td { padding: 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .report-table th { color: var(--text-muted); font-weight: 600; }
+
+        .camera-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 1000; display: none; flex-direction: column; justify-content: space-between; padding: 40px 20px; }
         .viewfinder { flex: 1; border: 2px dashed rgba(255,255,255,0.4); border-radius: 16px; margin: 20px 0; display: flex; align-items: center; justify-content: center; background: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.4)), url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400') center/cover; }
         .shutter-btn { width: 70px; height: 70px; background: white; border-radius: 50%; border: 5px solid #334155; margin: 0 auto; cursor: pointer; }
         .bottom-nav { background-color: #0b111e; height: 75px; display: flex; justify-content: space-around; align-items: center; border-top: 1px solid rgba(255, 255, 255, 0.05); }
@@ -116,31 +123,31 @@
         <div class="auth-logo-zone">
             <div class="auth-logo"><i class="fa-solid fa-wave-square" style="color:white; font-size:24px;"></i></div>
             <div class="auth-title">Fleet<span>Track</span></div>
-            <div class="auth-subtitle">Управление цифровым предприятием</div>
+            <div class="auth-subtitle">Система Мониторинга Рудный</div>
         </div>
         <div class="input-group">
             <i class="fa-solid fa-user"></i>
-            <input type="text" id="loginInput" class="auth-input" placeholder="Логин аккаунта">
+            <input type="text" id="loginInput" class="auth-input" placeholder="Логин">
         </div>
         <div class="input-group">
             <i class="fa-solid fa-lock"></i>
             <input type="password" id="passwordInput" class="auth-input" placeholder="Пароль">
         </div>
-        <div id="errorMsg" class="error-msg">Неверные учетные данные!</div>
+        <div id="errorMsg" class="error-msg">Неверные данные!</div>
         <button class="btn btn-primary" style="width:100%; padding:18px;" onclick="handleLogin()">
-            <i class="fa-solid fa-right-to-bracket"></i> Авторизоваться
+            <i class="fa-solid fa-right-to-bracket"></i> Войти в систему
         </button>
         <div class="hint-box">
-            <b>Доступы для проверки ролей:</b><br>
-            • 👤 <b>Диспетчер:</b> <code>dispatcher</code> / <code>555</code><br>
-            • 👑 <b>Директор:</b> <code>director</code> / <code>777</code><br>
-            • 🚛 <b>Водитель:</b> <code>ivanov_p</code> / <code>12345</code>
+            <b>Доступы:</b><br>
+            • 👤 Диспетчер: <code>dispatcher</code> / <code>555</code><br>
+            • 👑 Директор: <code>director</code> / <code>777</code><br>
+            • 🚛 Водитель: <code>ivanov_p</code> / <code>12345</code>
         </div>
     </div>
 
     <div id="cameraModule" class="camera-overlay">
         <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span><i class="fa-solid fa-lock" style="color:var(--accent-green)"></i> Защищенная Камера</span>
+            <span><i class="fa-solid fa-lock" style="color:var(--accent-green)"></i> Фотоподтверждение</span>
             <span onclick="closeCamera()" style="cursor:pointer; padding:5px;"><i class="fa-solid fa-xmark"></i></span>
         </div>
         <div class="viewfinder"></div>
@@ -166,79 +173,91 @@
                 <div class="count" id="progressCount">0 из 0</div>
             </div>
         </div>
-        <div class="section-title">Ваш персональный наряд</div>
-        <div id="driverTasksList"></div>
+        <div class="section-title">Текущие задания на смену</div>
+        <div id="driverTasksList" style="flex: 1; overflow-y: auto;"></div>
     </div>
 
     <div id="screenCeoDashboard" class="screen-content">
         <div class="section-title">
-            <span>Аналитика автопарка (УПРАВЛЕНИЕ)</span>
+            <span>Аналитика автопарка</span>
             <span style="font-size:11px; color:var(--accent-green);"><i class="fa-solid fa-circle"></i> Live</span>
         </div>
-        <div id="ceoDriversStatusList"></div>
+        <div id="ceoDriversStatusList" style="max-height: 250px; overflow-y: auto; margin-bottom: 15px;"></div>
+        
+        <div class="section-title"><i class="fa-solid fa-file-invoice"></i> Сводный отчет предприятия</div>
+        <div class="report-card">
+            <button class="btn btn-secondary" style="padding: 8px; font-size:12px; width:100%; margin-bottom:10px;" onclick="generateReport()">
+                <i class="fa-solid fa-sync"></i> Обновить данные отчета
+            </button>
+            <div style="max-height: 180px; overflow-y: auto;">
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>Экипаж</th>
+                            <th>Всего</th>
+                            <th>Вып.</th>
+                            <th>Проп.</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportTableBody">
+                        </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <div id="screenDispatchForm" class="screen-content">
-        <div class="section-title"><i class="fa-solid fa-tower-cell" style="color:var(--accent-pink)"></i> Создание онлайн-наряда</div>
+        <div class="section-title"><i class="fa-solid fa-tower-cell" style="color:var(--accent-pink)"></i> Назначить новый наряд</div>
         <div class="disp-form">
             <div>
-                <label class="disp-label">Выбрать экипаж водителя</label>
+                <label class="disp-label">Экипаж водителя</label>
                 <select id="targetDriverSelect" class="disp-select"></select>
             </div>
             <div>
-                <label class="disp-label">Адрес назначения объекта</label>
-                <input type="text" id="dispNewAddress" class="disp-input" placeholder="Например: ул. Ленина, д. 40">
+                <label class="disp-label">Адрес объекта</label>
+                <input type="text" id="dispNewAddress" class="disp-input" placeholder="г. Рудный, ул. Топоркова 14">
             </div>
             <div>
-                <label class="disp-label">Инструкция / Комментарий</label>
-                <input type="text" id="dispNewMeta" class="disp-input" placeholder="Например: Вывоз ТБО • Контейнер 5">
+                <label class="disp-label">Комментарий к задаче</label>
+                <input type="text" id="dispNewMeta" class="disp-input" placeholder="Вывоз строительного мусора">
             </div>
             <button class="btn btn-primary" style="padding:14px; background:linear-gradient(135deg, var(--accent-pink), #db2777);" onclick="dispatcherAssignTask()">
-                <i class="fa-solid fa-plus"></i> Опубликовать наряд водителю
+                <i class="fa-solid fa-plus"></i> Отправить наряд
             </button>
         </div>
-        <div class="section-title">Текущая загрузка экипажей и GPS</div>
-        <div id="dispDriversListVisual"></div>
+        <div class="section-title">Текущий статус рейсов</div>
+        <div id="dispDriversListVisual" style="flex: 1; overflow-y: auto;"></div>
     </div>
 
     <div id="screenChat" class="screen-content" style="height:100%;">
         <div class="chat-container">
-            <div class="section-title"><i class="fa-solid fa-comment-dots" style="color:var(--accent-blue)"></i> Рабочий чат компании</div>
+            <div class="section-title"><i class="fa-solid fa-comment-dots" style="color:var(--accent-blue)"></i> Чат компании</div>
             <div class="chat-messages-box" id="chatMessagesBox"></div>
             <div class="chat-input-row">
-                <input type="text" id="chatInputMessage" class="chat-text-input" placeholder="Напишите сообщение в чат...">
+                <input type="text" id="chatInputMessage" class="chat-text-input" placeholder="Текст сообщения...">
                 <button class="chat-send-btn" onclick="sendChatMessage()"><i class="fa-solid fa-paper-plane"></i></button>
             </div>
         </div>
     </div>
 
     <div id="screenMap" class="screen-content">
-        <div class="section-title">🛰️ Мониторинг: Костанайская обл., г. Рудный</div>
+        <div class="section-title">🛰️ Живой GPS Радар: г. Рудный</div>
         <div class="map-wrapper">
-            <div class="map-city-label"><i class="fa-solid fa-map-location-dot"></i> Рудный GPS Мониторинг</div>
-            <canvas id="rudnyCanvas" width="370" height="260"></canvas>
+            <div id="realLeafletMap"></div>
         </div>
         <div class="gps-data-grid">
             <div class="gps-telemetry-box">
-                <span>Борт номер / ТС</span>
+                <span>Транспортное средство</span>
                 <p id="mapVehicleName" style="font-size:13px; color:var(--accent-blue);">Не выбран</p>
             </div>
             <div class="gps-telemetry-box">
-                <span>Текущая Скорость</span>
+                <span>Скорость</span>
                 <p id="telemetrySpeed">-- км/ч</p>
             </div>
-            <div class="gps-telemetry-box">
-                <span>Топливный бак</span>
-                <p id="telemetryFuel">-- %</p>
+            <div class="gps-telemetry-box" style="grid-column: span 2;">
+                <span>Текущая геозона</span>
+                <p id="mapDriverSub" style="font-size:12px; color:var(--text-muted); font-weight:normal; margin-top:3px;">Выберите водителя</p>
             </div>
-            <div class="gps-telemetry-box">
-                <span>Статус двигателя</span>
-                <p id="telemetryEngine">--</p>
-            </div>
-        </div>
-        <div class="gps-telemetry-box" style="margin-top:10px; text-align:center;">
-            <span>Текущая геозона на карте г. Рудный</span>
-            <p id="mapDriverSub" style="font-size:13px; color:var(--text-muted); font-weight:normal; margin-top:3px;">Выберите водителя в списке нарядов или аналитики</p>
         </div>
     </div>
 
@@ -256,32 +275,36 @@
     <nav class="bottom-nav" id="mainNavigationRow"></nav>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
+    // Глобальная база данных в оперативной памяти (все редактируемо прямо в браузере)
     const fleetUsers = {
-        "ivanov_p": { role: "driver", password: "12345", name: "Иванов П. В. (КамАЗ)", vehicle: "КамАЗ • 123 ABC 11", statusText: "На маршруте", gps: { speed: "42 км/ч", fuel: "74%", engine: "ВКЛ (В пути)", mapX: 120, mapY: 90, locDesc: "ул. Ленина (Рудный)" } },
-        "ahmetov_s": { role: "driver", password: "54321", name: "Ахметов С. К. (Грейдер)", vehicle: "Грейдер CAT • 777 TAX 11", statusText: "На маршруте", gps: { speed: "12 км/ч", fuel: "48%", engine: "ВКЛ (Очистка)", mapX: 250, mapY: 130, locDesc: "пр. Космонавтов (Рудный)" } },
-        "semenov_d": { role: "driver", password: "0000", name: "Семенов Д. И. (Погрузчик)", vehicle: "Погрузчик • 451 КМ 11", statusText: "Межсменный отдых", gps: { speed: "0 км/ч", fuel: "92%", engine: "ВЫКЛ (База)", mapX: 80, mapY: 200, locDesc: "Промзона ССГПО" } },
-        "director": { role: "ceo", password: "777", name: "Канат Бахтиярович", vehicle: "Директор компании" },
-        "dispatcher": { role: "disp", password: "555", name: "Мария Смирнова (База)", vehicle: "Старший Диспетчер" }
+        "ivanov_p": { role: "driver", password: "12345", name: "Иванов П. В.", vehicle: "КамАЗ • 123 ABC 11", statusText: "На маршруте", gps: { speed: "42 км/ч", lat: 52.9649, lng: 63.1235, locDesc: "ул. Ленина (Центр)" } },
+        "ahmetov_s": { role: "driver", password: "54321", name: "Ахметов С. К.", vehicle: "Грейдер CAT • 777 TAX 11", statusText: "На маршруте", gps: { speed: "12 км/ч", lat: 52.9550, lng: 63.1410, locDesc: "пр. Космонавтов" } },
+        "semenov_d": { role: "driver", password: "0000", name: "Семенов Д. И.", vehicle: "Погрузчик • 451 КМ 11", statusText: "Отдых", gps: { speed: "0 км/ч", lat: 52.9390, lng: 63.0990, locDesc: "Промзона ССГПО" } },
+        "director": { role: "ceo", password: "777", name: "Канат Бахтиярович", vehicle: "Директор" },
+        "dispatcher": { role: "disp", password: "555", name: "Мария Смирнова", vehicle: "Старший Диспетчер" }
     };
 
     let tasksDatabase = {
         "ivanov_p": [
-            { id: 1, address: "ул. Ленина, д. 40", status: "success", info: "09:15 • Подтверждено фото" },
-            { id: 2, address: "ул. Строителей, д. 12", status: "success", info: "09:42 • Подтверждено фото" },
+            { id: 1, address: "ул. Ленина, д. 40", status: "success", info: "Подтверждено фото" },
+            { id: 2, address: "ул. Строителей, д. 12", status: "success", info: "Подтверждено фото" },
             { id: 3, address: "пр. Космонавтов, д. 5Б", status: "active", info: "В геозоне объекта" },
-            { id: 4, address: "ул. Топоркова, д. 8", status: "pending", info: "План: 11:30" }
+            { id: 4, address: "ул. Топоркова, д. 8", status: "pending", info: "Ожидание" }
         ],
-        "ahmetov_s": [{ id: 1, address: "Объездное шоссе, Рудный", status: "active", info: "Очистка дорожного покрытия" }],
+        "ahmetov_s": [{ id: 1, address: "Объездное шоссе, Рудный", status: "active", info: "Очистка дорог" }],
         "semenov_d": []
     };
 
     let chatMessages = [
-        { senderKey: "dispatcher", text: "Внимание всем экипажам г. Рудный, на дорогах сильный гололед. Соблюдайте дистанцию.", time: "10:15" },
-        { senderKey: "ivanov_p", text: "Принял, база. Проезжаю Ленина.", time: "10:18" }
+        { senderKey: "dispatcher", text: "Экипажам г. Рудный, внимание на дорогах гололед!", time: "10:15" },
+        { senderKey: "ivanov_p", text: "Принял, проезжаю ул. Ленина.", time: "10:18" }
     ];
 
     let currentUserKey = "", activePointId = null, selectedGpsDriverKey = null;
+    let mapInstance = null;
+    let mapMarkers = {};
 
     function handleLogin() {
         const login = document.getElementById('loginInput').value.trim();
@@ -299,7 +322,7 @@
         currentUserKey = ""; activePointId = null; selectedGpsDriverKey = null;
         document.getElementById('loginInput').value = "";
         document.getElementById('passwordInput').value = "";
-        document.getElementById('errorMsg').style.display = 'none';
+        if(mapInstance) { mapInstance.remove(); mapInstance = null; mapMarkers = {}; }
         document.querySelectorAll('.screen-content').forEach(s => s.classList.remove('active-screen'));
         document.getElementById('actionPanel').style.display = 'none';
         document.getElementById('authScreen').style.display = 'flex';
@@ -310,7 +333,8 @@
         badge.className = `role-badge ${user.role}`;
         badge.innerText = user.role === 'ceo' ? 'Директор' : user.role === 'disp' ? 'Диспетчер' : 'Экипаж';
         buildNavigation(user.role);
-        if (user.role === 'ceo') { switchContentScreen('CeoDashboard'); renderCeoDashboard(); }
+        
+        if (user.role === 'ceo') { switchContentScreen('CeoDashboard'); renderCeoDashboard(); generateReport(); }
         else if (user.role === 'disp') { switchContentScreen('DispatchForm'); renderDispatcherDashboard(); }
         else { selectedGpsDriverKey = currentUserKey; switchContentScreen('DriverTasks'); initDriverRoute(); }
         renderChatHistory();
@@ -321,7 +345,7 @@
         if (role === 'ceo') {
             nav.innerHTML = `<div class="nav-item active" id="tabCeoDashboard" onclick="switchContentScreen('CeoDashboard', this)"><i class="fa-solid fa-chart-line"></i><span>Аналитика</span></div><div class="nav-item" id="tabMap" onclick="switchContentScreen('Map', this)"><i class="fa-solid fa-map-location-dot"></i><span>Карта</span></div><div class="nav-item" onclick="logoutSystem()"><i class="fa-solid fa-right-from-bracket" style="color:var(--accent-red)"></i><span>Выход</span></div>`;
         } else if (role === 'disp') {
-            nav.innerHTML = `<div class="nav-item active" id="tabDispatchForm" onclick="switchContentScreen('DispatchForm', this)"><i class="fa-solid fa-tower-cell"></i><span>Наряды</span></div><div class="nav-item" id="tabMap" onclick="switchContentScreen('Map', this)"><i class="fa-solid fa-map-location-dot"></i><span>Карта</span></div><div class="nav-item" onclick="switchContentScreen('Chat', this)"><i class="fa-solid fa-comment-dots"></i><span>Чат</span></div><div class="nav-item" onclick="logoutSystem()"><i class="fa-solid fa-right-to-bracket" style="color:var(--accent-red)"></i><span>Выход</span></div>`;
+            nav.innerHTML = `<div class="nav-item active" id="tabDispatchForm" onclick="switchContentScreen('DispatchForm', this)"><i class="fa-solid fa-tower-cell"></i><span>Наряды</span></div><div class="nav-item" id="tabMap" onclick="switchContentScreen('Map', this)"><i class="fa-solid fa-map-location-dot"></i><span>Карта</span></div><div class="nav-item" onclick="switchContentScreen('Chat', this)"><i class="fa-solid fa-comment-dots"></i><span>Чат</span></div><div class="nav-item" onclick="logoutSystem()"><i class="fa-solid fa-right-from-bracket" style="color:var(--accent-red)"></i><span>Выход</span></div>`;
         } else {
             nav.innerHTML = `<div class="nav-item active" id="tabDriverTasks" onclick="switchContentScreen('DriverTasks', this)"><i class="fa-solid fa-list-check"></i><span>Маршрут</span></div><div class="nav-item" id="tabMap" onclick="switchContentScreen('Map', this)"><i class="fa-solid fa-map-location-dot"></i><span>Карта</span></div><div class="nav-item" onclick="switchContentScreen('Chat', this)"><i class="fa-solid fa-comment-dots"></i><span>Чат</span></div><div class="nav-item" onclick="logoutSystem()"><i class="fa-solid fa-right-from-bracket" style="color:var(--accent-red)"></i><span>Выход</span></div>`;
         }
@@ -331,38 +355,54 @@
         document.querySelectorAll('.screen-content').forEach(s => s.classList.remove('active-screen'));
         document.getElementById(`screen${screenName}`).classList.add('active-screen');
         if(navElement) { document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active')); navElement.classList.add('active'); }
+        
         const ap = document.getElementById('actionPanel');
         ap.style.display = (screenName === 'DriverTasks' && fleetUsers[currentUserKey].role === 'driver') ? 'block' : 'none';
-        if (screenName === 'Map') { if(fleetUsers[currentUserKey].role === 'driver') selectedGpsDriverKey = currentUserKey; updateGpsUIData(); drawRudnyMap(); }
+        
+        if (screenName === 'Map') { 
+            if(fleetUsers[currentUserKey].role === 'driver') selectedGpsDriverKey = currentUserKey;
+            initOrUpdateRealMap(); 
+        }
         if (screenName === 'Chat') { const box = document.getElementById('chatMessagesBox'); box.scrollTop = box.scrollHeight; }
     }
 
-    function drawRudnyMap() {
-        const canvas = document.getElementById('rudnyCanvas');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1;
-        for(let i=0; i<canvas.width; i+=30) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
-        for(let j=0; j<canvas.height; j+=30) { ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(canvas.width,j); ctx.stroke(); }
-        ctx.lineWidth = 8; ctx.strokeStyle = '#2d3748';
-        ctx.beginPath(); ctx.moveTo(30,90); ctx.lineTo(340,90); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(250,20); ctx.lineTo(250,240); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(30,150); ctx.lineTo(340,150); ctx.stroke();
-        ctx.fillStyle = 'rgba(148,163,184,0.7)'; ctx.font = '10px Inter';
-        ctx.fillText("ул. Ленина",40,84); ctx.fillText("ул. Строителей",40,144);
-        ctx.fillText("пр. Космонавтов",255,35); ctx.fillText("ПРОМЗОНА ССГПО / КАРЬЕР",40,235);
-        for (const [key, user] of Object.entries(fleetUsers)) {
-            if (!user.gps) continue;
-            if (fleetUsers[currentUserKey].role === 'driver' && key !== currentUserKey) continue;
-            const isSel = (key === selectedGpsDriverKey);
-            ctx.beginPath(); ctx.arc(user.gps.mapX, user.gps.mapY, isSel ? 8 : 5, 0, 2*Math.PI);
-            ctx.fillStyle = isSel ? '#3b82f6' : '#22c55e'; ctx.fill();
-            if(isSel) { ctx.strokeStyle='rgba(59,130,246,0.4)'; ctx.lineWidth=6; ctx.stroke(); }
-            ctx.fillStyle = isSel ? '#ffffff' : '#94a3b8';
-            ctx.font = isSel ? 'bold 10px Inter' : '9px Inter';
-            ctx.fillText(user.vehicle.split(' • ')[0], user.gps.mapX-20, user.gps.mapY-12);
-        }
+    // Инициализация реальной карты Leaflet Map OpenStreetMap
+    function initOrUpdateRealMap() {
+        // Координаты центра г. Рудный
+        const rudnyCenter = [52.9592, 63.1293];
+        
+        setTimeout(() => {
+            if (!mapInstance) {
+                mapInstance = L.map('realLeafletMap').setView(rudnyCenter, 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(mapInstance);
+            }
+            
+            // Удаляем старые маркеры
+            Object.values(mapMarkers).forEach(m => mapInstance.removeLayer(m));
+            mapMarkers = {};
+
+            // Отрисовываем машины на реальной карте
+            for (const [key, user] of Object.entries(fleetUsers)) {
+                if (!user.gps) continue;
+                if (fleetUsers[currentUserKey].role === 'driver' && key !== currentUserKey) continue;
+
+                const marker = L.marker([user.gps.lat, user.gps.lng]).addTo(mapInstance)
+                    .bindPopup(`<b>${user.name}</b><br>${user.vehicle}<br>Скорость: ${user.gps.speed}`);
+                
+                mapMarkers[key] = marker;
+            }
+
+            updateGpsUIData();
+
+            // Автоматический переброс на точные координаты выбранного водителя
+            if (selectedGpsDriverKey && fleetUsers[selectedGpsDriverKey]?.gps) {
+                const driverGps = fleetUsers[selectedGpsDriverKey].gps;
+                mapInstance.setView([driverGps.lat, driverGps.lng], 15);
+                mapMarkers[selectedGpsDriverKey]?.openPopup();
+            }
+        }, 100);
     }
 
     function updateGpsUIData() {
@@ -372,11 +412,13 @@
         document.getElementById('mapVehicleName').innerText = v.vehicle;
         document.getElementById('mapDriverSub').innerText = `Экипаж: ${v.name} | Локация: ${v.gps.locDesc}`;
         document.getElementById('telemetrySpeed').innerText = v.gps.speed;
-        document.getElementById('telemetryFuel').innerText = v.gps.fuel;
-        document.getElementById('telemetryEngine').innerText = v.gps.engine;
     }
 
-    function viewVehicleGPS(driverKey) { selectedGpsDriverKey = driverKey; switchContentScreen('Map', document.getElementById('tabMap')); }
+    // КЛИК НА ВОДИТЕЛЯ ИЗ ИНТЕРФЕЙСА ДИСПЕТЧЕРА / ДИРЕКТОРА К КАРТЕ
+    function viewVehicleGPS(driverKey) { 
+        selectedGpsDriverKey = driverKey; 
+        switchContentScreen('Map', document.getElementById('tabMap')); 
+    }
 
     function generateDriversStatusHTML(isControlView=false) {
         let html = '';
@@ -387,7 +429,21 @@
             const total = tasks.length;
             const pct = total>0?Math.round((done/total)*100):0;
             const dotClass = user.statusText==='На маршруте'?'status-online':'status-rest';
-            html+=`<div class="driver-leaderboard-card"><div class="driver-info-row"><div><h4>${user.name}</h4><p>${user.vehicle}</p></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;"><div class="driver-status-dot ${dotClass}">${user.statusText}</div>${isControlView?`<button class="gps-btn" onclick="viewVehicleGPS('${key}')"><i class="fa-solid fa-satellite-dish"></i> GPS Радар</button>`:''}</div></div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:4px;"><span>Прогресс рейса в г. Рудный</span><span style="color:#fff;font-weight:600">${pct}% (${done}/${total})</span></div><div class="progress-bar-container"><div class="progress-bar-fill" style="width:${pct}%"></div></div></div>`;
+            
+            html+=`<div class="driver-leaderboard-card">
+                <div class="driver-info-row">
+                    <div><h4>${user.name}</h4><p>${user.vehicle}</p></div>
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+                        <div class="driver-status-dot ${dotClass}">${user.statusText}</div>
+                        ${isControlView?`<button class="gps-btn" onclick="viewVehicleGPS('${key}')"><i class="fa-solid fa-satellite-dish"></i> GPS Радар</button>`:''}
+                    </div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:4px;">
+                    <span>Выполнение нарядов</span>
+                    <span style="color:#fff;font-weight:600">${pct}% (${done}/${total})</span>
+                </div>
+                <div class="progress-bar-container"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
+            </div>`;
         }
         return html;
     }
@@ -396,22 +452,39 @@
 
     function renderDispatcherDashboard() {
         const sel = document.getElementById('targetDriverSelect');
-        if(sel) { sel.innerHTML=''; for(const[k,u] of Object.entries(fleetUsers)){if(u.role==='driver'){const o=document.createElement('option');o.value=k;o.innerText=u.name;sel.appendChild(o);}} }
+        if(sel) { 
+            sel.innerHTML=''; 
+            for(const[k,u] of Object.entries(fleetUsers)){
+                if(u.role==='driver'){
+                    const o=document.createElement('option');o.value=k;o.innerText=u.name;sel.appendChild(o);
+                }
+            } 
+        }
         document.getElementById('dispDriversListVisual').innerHTML=generateDriversStatusHTML(true);
     }
 
+    // РЕДАКТИРОВАНИЕ / СОЗДАНИЕ НАРИЯДА ДИСПЕТЧЕРОМ
     function dispatcherAssignTask() {
         const drv=document.getElementById('targetDriverSelect').value;
         const addr=document.getElementById('dispNewAddress').value.trim();
-        const meta=document.getElementById('dispNewMeta').value.trim()||"Наряд диспетчера";
+        const meta=document.getElementById('dispNewMeta').value.trim()||"Плановый выезд";
         if(!addr){alert("Введите адрес!");return;}
+        
         if(!tasksDatabase[drv])tasksDatabase[drv]=[];
-        tasksDatabase[drv].push({id:tasksDatabase[drv].length+1,address:addr,status:tasksDatabase[drv].some(t=>t.status==='active')?'pending':'active',info:meta});
-        document.getElementById('dispNewAddress').value='';document.getElementById('dispNewMeta').value='';
-        alert("Задача отправлена на бортовой компьютер!");
+        tasksDatabase[drv].push({
+            id:tasksDatabase[drv].length+1,
+            address:addr,
+            status:tasksDatabase[drv].some(t=>t.status==='active')?'pending':'active',
+            info:meta
+        });
+        
+        document.getElementById('dispNewAddress').value='';
+        document.getElementById('dispNewMeta').value='';
+        alert("Наряд успешно опубликован на борт!");
         renderDispatcherDashboard();
     }
 
+    // ЛОГИКА ВОДИТЕЛЯ
     function initDriverRoute() {
         const u=fleetUsers[currentUserKey];
         document.getElementById('carNumber').innerText=u.vehicle;
@@ -453,18 +526,43 @@
         const total=tasks.length;
         const pct=total>0?Math.round((done/total)*100):0;
         document.getElementById('progressPercent').innerText=`${pct}%`;
-        document.getElementById('progressCount').innerText=`${done} из ${total} выполнено`;
+        document.getElementById('progressCount').innerText=`${done} из ${total} объектов`;
         const at=tasks.find(p=>p.id===activePointId);
-        document.getElementById('currentTargetName').innerText=(at&&at.status==='active')?at.address:"Все задачи завершены!";
+        document.getElementById('currentTargetName').innerText=(at&&at.status==='active')?at.address:"Маршрутный лист пуст";
     }
 
+    // СИСТЕМА ОТЧЕТНОСТИ ДЛЯ РУКОВОДИТЕЛЯ
+    function generateReport() {
+        const tbody = document.getElementById('reportTableBody');
+        if(!tbody) return;
+        tbody.innerHTML = '';
+        
+        for (const [key, user] of Object.entries(fleetUsers)) {
+            if (user.role !== 'driver') continue;
+            const tasks = tasksDatabase[key] || [];
+            const successCount = tasks.filter(t => t.status === 'success').length;
+            const skippedCount = tasks.filter(t => t.status === 'skipped').length;
+            const totalCount = tasks.length;
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td style="font-weight:600;">${user.name}</td>
+                <td>${totalCount}</td>
+                <td style="color:var(--accent-green)">${successCount}</td>
+                <td style="color:var(--accent-red)">${skippedCount}</td>
+            `;
+            tbody.appendChild(row);
+        }
+    }
+
+    // СИСТЕМА КОРПОРАТИВНОГО ЧАТА
     function renderChatHistory() {
         const box=document.getElementById('chatMessagesBox');
         if(!box)return;
         box.innerHTML='';
         chatMessages.forEach(msg=>{
             const isMe=msg.senderKey===currentUserKey;
-            const name=(fleetUsers[msg.senderKey]||{name:"Неизвестный"}).name;
+            const name=(fleetUsers[msg.senderKey]||{name:"Оператор"}).name;
             const b=document.createElement('div');
             b.className=`msg-bubble ${isMe?'my-msg':''}`;
             b.innerHTML=`<div class="msg-sender">${name}</div><div class="msg-text">${msg.text}</div><div class="msg-time">${msg.time}</div>`;
@@ -488,14 +586,14 @@
     function takePhoto() {
         const tasks=tasksDatabase[currentUserKey]||[];
         const cur=tasks.find(p=>p.id===activePointId);
-        if(cur){cur.status='success';cur.info='Только что • Подтверждено фотоотчетом';}
+        if(cur){cur.status='success';cur.info='Выполнено фотоподтверждением';}
         closeCamera();
         const next=tasks.find(p=>p.status==='pending');
         if(next)selectDriverPoint(next.id);else renderDriverCards();
     }
 
     function skipPoint() {
-        const reason=prompt("Причина пропуска объекта:");
+        const reason=prompt("Укажите причину пропуска объекта:");
         if(reason){
             const tasks=tasksDatabase[currentUserKey]||[];
             const cur=tasks.find(p=>p.id===activePointId);
